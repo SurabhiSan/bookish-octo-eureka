@@ -1,11 +1,8 @@
 import io
-import os
 from pathlib import Path
-from typing import Tuple
 
 
 def parse_document(filename: str, content: bytes) -> str:
-    """Return plain text from raw file bytes."""
     ext = Path(filename).suffix.lower()
 
     if ext in (".txt", ".md"):
@@ -19,14 +16,11 @@ def parse_document(filename: str, content: bytes) -> str:
 
     if ext == ".pdf":
         try:
-            from docling.document_converter import DocumentConverter
-            conv = DocumentConverter()
-            result = conv.convert(io.BytesIO(content), filename=filename)
-            return result.document.export_to_markdown()
+            import PyPDF2
+            reader = PyPDF2.PdfReader(io.BytesIO(content))
+            return "\n".join(page.extract_text() or "" for page in reader.pages)
         except Exception:
-            pass
-        # Fallback: unstructured
-        return _unstructured_parse(content, filename)
+            return _unstructured_parse(content, filename)
 
     if ext == ".docx":
         try:
@@ -34,8 +28,7 @@ def parse_document(filename: str, content: bytes) -> str:
             doc = DocxDocument(io.BytesIO(content))
             return "\n".join(p.text for p in doc.paragraphs)
         except Exception:
-            pass
-        return _unstructured_parse(content, filename)
+            return _unstructured_parse(content, filename)
 
     return _unstructured_parse(content, filename)
 

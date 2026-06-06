@@ -15,11 +15,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     cohere_api_key: str = ""
 
-    r2_account_id: str = ""
-    r2_access_key_id: str = ""
-    r2_secret_access_key: str = ""
-    r2_bucket_name: str = "ai-clone-uploads"
-    r2_endpoint_url: str = ""
+    upload_dir: str = "uploads"
 
     ragas_sample_rate: float = 0.10
     max_upload_size_mb: int = 50

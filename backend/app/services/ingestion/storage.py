@@ -1,40 +1,29 @@
-import boto3
-from botocore.exceptions import ClientError
+"""Local disk storage — replaces R2 for MVP."""
+from pathlib import Path
 from app.core.config import get_settings
 
 
-def _get_s3_client():
+def _upload_dir() -> Path:
     settings = get_settings()
-    return boto3.client(
-        "s3",
-        endpoint_url=settings.r2_endpoint_url or None,
-        aws_access_key_id=settings.r2_access_key_id,
-        aws_secret_access_key=settings.r2_secret_access_key,
-    )
+    d = Path(settings.upload_dir)
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 
 
 async def upload_to_r2(key: str, content: bytes) -> None:
-    settings = get_settings()
-    import asyncio
-    loop = asyncio.get_event_loop()
-    client = _get_s3_client()
-    await loop.run_in_executor(
-        None,
-        lambda: client.put_object(Bucket=settings.r2_bucket_name, Key=key, Body=content),
-    )
+    path = _upload_dir() / key
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
 
 
 def download_from_r2(key: str) -> bytes:
-    settings = get_settings()
-    client = _get_s3_client()
-    response = client.get_object(Bucket=settings.r2_bucket_name, Key=key)
-    return response["Body"].read()
+    path = _upload_dir() / key
+    return path.read_bytes()
 
 
 def delete_from_r2(key: str) -> None:
-    settings = get_settings()
-    client = _get_s3_client()
+    path = _upload_dir() / key
     try:
-        client.delete_object(Bucket=settings.r2_bucket_name, Key=key)
-    except ClientError:
+        path.unlink(missing_ok=True)
+    except Exception:
         pass
