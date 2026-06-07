@@ -9,8 +9,8 @@ settings = get_settings()
 celery_app = Celery("ai_clone", broker=settings.redis_url, backend=settings.redis_url)
 celery_app.conf.task_serializer = "json"
 
-# Sync engine for Celery workers
-_sync_url = settings.database_url.replace("+asyncpg", "+psycopg2")
+# Sync engine for Celery workers (psycopg2 uses sslmode=, asyncpg uses ssl=)
+_sync_url = settings.database_url.replace("+asyncpg", "+psycopg2").replace("?ssl=require", "?sslmode=require")
 _engine = create_engine(_sync_url, pool_pre_ping=True)
 SyncSession = sessionmaker(_engine)
 

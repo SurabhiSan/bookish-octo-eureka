@@ -106,10 +106,19 @@ async def upload_document(
     await db.flush()
 
     from app.workers.ingestion_tasks import ingest_document_task
-    task = ingest_document_task.delay(str(doc.id))
-    doc.celery_task_id = task.id
+    doc_id = str(doc.id)
+    try:
+        task = ingest_document_task.delay(doc_id)
+        doc.celery_task_id = task.id
+    except Exception:
+        # Redis/Celery unavailable — run ingestion in a background thread
+        import threading
+        threading.Thread(
+            target=lambda: ingest_document_task.apply(args=[doc_id]),
+            daemon=True,
+        ).start()
 
-    return {"document_id": str(doc.id), "status": "queued"}
+    return {"document_id": doc_id, "status": "queued"}
 
 
 @router.get("/{document_id}")

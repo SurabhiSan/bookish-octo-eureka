@@ -29,7 +29,7 @@ async def _hyde_expand(query: str) -> Optional[str]:
         from openai import AsyncOpenAI
         client = AsyncOpenAI(api_key=api_key, base_url=settings.openrouter_base_url)
         response = await client.chat.completions.create(
-            model="meta-llama/llama-3.2-3b-instruct:free",
+            model="google/gemma-4-26b-a4b-it:free",
             max_tokens=150,
             messages=[{"role": "user", "content": f"Write a short paragraph (2-3 sentences) that directly addresses: {query}"}],
         )

@@ -77,7 +77,7 @@ async def stream_conversation_turn(
     messages = [{"role": "system", "content": system_prompt}] + history_messages + [{"role": "user", "content": user_message}]
 
     stream = await client.chat.completions.create(
-        model="meta-llama/llama-3.1-8b-instruct:free",
+        model="nvidia/nemotron-3-super-120b-a12b:free",
         max_tokens=2000,
         messages=messages,
         stream=True,

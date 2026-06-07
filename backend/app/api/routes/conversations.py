@@ -122,9 +122,8 @@ async def send_message(
 
         yield "data: [DONE]\n\n"
 
-        # Async persist after stream completes
-        import asyncio
-        asyncio.create_task(_persist_turn(
+        # Persist while the session is still open
+        await _persist_turn(
             db=db,
             conversation_id=conversation_id,
             clone=clone,
@@ -132,7 +131,7 @@ async def send_message(
             assistant_content=full_response,
             retrieved_chunk_ids=retrieved_chunk_ids,
             history=history,
-        ))
+        )
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
