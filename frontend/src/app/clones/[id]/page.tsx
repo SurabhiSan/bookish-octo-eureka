@@ -15,6 +15,13 @@ interface Document {
 
 const SOURCE_TYPES = ["journal", "email", "article", "note", "transcript", "tweet"];
 
+const statusConfig: Record<string, { label: string; classes: string }> = {
+  queued:     { label: "Queued",     classes: "bg-zinc-800 text-zinc-400 ring-zinc-700/50" },
+  processing: { label: "Processing", classes: "bg-blue-500/10 text-blue-400 ring-blue-500/20" },
+  indexed:    { label: "Indexed",    classes: "bg-emerald-500/10 text-emerald-400 ring-emerald-500/20" },
+  failed:     { label: "Failed",     classes: "bg-red-500/10 text-red-400 ring-red-500/20" },
+};
+
 export default function CloneDetail() {
   const params = useParams();
   const router = useRouter();
@@ -37,7 +44,6 @@ export default function CloneDetail() {
     fetchDocs();
   }, [cloneId, fetchDocs]);
 
-  // Poll for pending documents
   useEffect(() => {
     const pending = docs.some((d) => d.status === "queued" || d.status === "processing");
     if (!pending) return;
@@ -55,104 +61,146 @@ export default function CloneDetail() {
     if (res.ok) fetchDocs();
   }
 
-  const statusColors: Record<string, string> = {
-    queued: "bg-gray-100 text-gray-600",
-    processing: "bg-blue-100 text-blue-700",
-    indexed: "bg-green-100 text-green-700",
-    failed: "bg-red-100 text-red-700",
-  };
-
   const confidence = (clone?.identity_anchor as Record<string, string> | null)?.confidence;
 
   return (
-    <div className="mx-auto max-w-3xl p-6">
-      <Link href="/dashboard" className="text-sm text-indigo-600 hover:underline">← Dashboard</Link>
-
-      {clone && (
-        <div className="mt-4 mb-6 flex items-start justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">{clone.name}</h1>
-            <p className="text-sm text-gray-400 mt-1">{clone.chunk_count} chunks indexed</p>
-          </div>
-          <Link
-            href={`/chat/${cloneId}/new`}
-            className="rounded bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700"
-          >
-            Chat with clone
+    <div className="min-h-screen bg-[#08080f]">
+      {/* Navbar */}
+      <header className="border-b border-zinc-800/60 bg-[#08080f]/80 backdrop-blur-md sticky top-0 z-10">
+        <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
+          <Link href="/dashboard" className="flex items-center gap-1.5 text-sm text-zinc-500 transition hover:text-zinc-300">
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
+            </svg>
+            Dashboard
           </Link>
-        </div>
-      )}
-
-      {confidence === "low" && (
-        <div className="mb-4 rounded-lg bg-yellow-50 border border-yellow-200 px-4 py-3 text-sm text-yellow-800">
-          ⚠ This clone has limited source material (fewer than 5 indexed chunks). Responses may be less accurate. Upload more content to improve quality.
-        </div>
-      )}
-
-      <div className="mb-6 rounded-xl border bg-white p-5 shadow-sm">
-        <h2 className="mb-3 font-semibold">Upload Document</h2>
-        <div className="mb-3 flex gap-2 flex-wrap">
-          {SOURCE_TYPES.map((t) => (
-            <button
-              key={t}
-              onClick={() => setSourceType(t)}
-              className={`rounded px-3 py-1 text-sm ${sourceType === t ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-600"}`}
+          {clone && (
+            <Link
+              href={`/chat/${cloneId}/new`}
+              className="flex items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-violet-500"
             >
-              {t}
-            </button>
-          ))}
-        </div>
-        <div
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragOver(false);
-            const file = e.dataTransfer.files[0];
-            if (file) uploadFile(file);
-          }}
-          className={`rounded-lg border-2 border-dashed p-8 text-center transition ${dragOver ? "border-indigo-400 bg-indigo-50" : "border-gray-200"}`}
-        >
-          {uploading ? (
-            <p className="text-gray-500">Uploading…</p>
-          ) : (
-            <>
-              <p className="text-gray-500 mb-2">Drop a file here, or</p>
-              <label className="cursor-pointer text-indigo-600 underline">
-                browse
-                <input
-                  type="file"
-                  className="hidden"
-                  accept=".pdf,.docx,.txt,.md,.csv"
-                  onChange={(e) => e.target.files?.[0] && uploadFile(e.target.files[0])}
-                />
-              </label>
-              <p className="mt-1 text-xs text-gray-400">PDF, DOCX, TXT, MD, CSV · max 50MB</p>
-            </>
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z" />
+              </svg>
+              Chat
+            </Link>
           )}
         </div>
-      </div>
+      </header>
 
-      {docs.length === 0 ? (
-        <div className="rounded-xl border-2 border-dashed border-gray-200 py-12 text-center text-gray-400">
-          No documents yet. Upload content to train this clone.
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {docs.map((doc) => (
-            <div key={doc.id} className="flex items-center justify-between rounded-lg border bg-white px-4 py-3">
-              <div>
-                <p className="font-medium text-sm">{doc.filename}</p>
-                <p className="text-xs text-gray-400">{doc.source_type} · {doc.chunk_count} chunks</p>
-                {doc.error && <p className="text-xs text-red-500">{doc.error}</p>}
+      <main className="mx-auto max-w-3xl px-6 py-10">
+        {/* Clone header */}
+        {clone && (
+          <div className="mb-8">
+            <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">{clone.name}</h1>
+            <p className="mt-1 text-sm text-zinc-500">
+              {clone.chunk_count === 0 ? "No content indexed yet" : `${clone.chunk_count} chunks indexed`}
+            </p>
+          </div>
+        )}
+
+        {/* Low data warning */}
+        {confidence === "low" && (
+          <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3">
+            <svg className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+            </svg>
+            <p className="text-sm text-amber-400">
+              Limited source material — fewer than 5 chunks indexed. Upload more content to improve response quality.
+            </p>
+          </div>
+        )}
+
+        {/* Upload section */}
+        <div className="mb-6 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
+          <h2 className="mb-4 text-sm font-semibold text-zinc-300">Upload Content</h2>
+
+          {/* Source type pills */}
+          <div className="mb-4 flex flex-wrap gap-2">
+            {SOURCE_TYPES.map((t) => (
+              <button
+                key={t}
+                onClick={() => setSourceType(t)}
+                className={`rounded-full px-3 py-1 text-xs font-medium capitalize transition ${
+                  sourceType === t
+                    ? "bg-violet-600 text-white"
+                    : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300"
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+
+          {/* Drop zone */}
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOver(false);
+              const file = e.dataTransfer.files[0];
+              if (file) uploadFile(file);
+            }}
+            className={`rounded-xl border-2 border-dashed p-10 text-center transition ${
+              dragOver
+                ? "border-violet-500 bg-violet-500/5"
+                : "border-zinc-800 hover:border-zinc-700"
+            }`}
+          >
+            {uploading ? (
+              <div className="flex items-center justify-center gap-2 text-sm text-zinc-400">
+                <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Uploading…
               </div>
-              <span className={`rounded px-2 py-1 text-xs font-medium ${statusColors[doc.status] || ""}`}>
-                {doc.status}
-              </span>
-            </div>
-          ))}
+            ) : (
+              <>
+                <svg className="mx-auto mb-3 h-8 w-8 text-zinc-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                </svg>
+                <p className="text-sm text-zinc-400 mb-1">Drop a file here, or{" "}
+                  <label className="cursor-pointer text-violet-400 hover:text-violet-300 transition">
+                    browse
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.docx,.txt,.md,.csv"
+                      onChange={(e) => e.target.files?.[0] && uploadFile(e.target.files[0])}
+                    />
+                  </label>
+                </p>
+                <p className="text-xs text-zinc-600">PDF, DOCX, TXT, MD, CSV · max 50MB</p>
+              </>
+            )}
+          </div>
         </div>
-      )}
+
+        {/* Documents list */}
+        {docs.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-zinc-800 py-12 text-center text-sm text-zinc-600">
+            No documents yet — upload content to train this clone.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <h2 className="mb-3 text-sm font-semibold text-zinc-400">Documents</h2>
+            {docs.map((doc) => (
+              <div key={doc.id} className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-zinc-200">{doc.filename}</p>
+                  <p className="text-xs text-zinc-500 capitalize">{doc.source_type} · {doc.chunk_count} chunks</p>
+                  {doc.error && <p className="text-xs text-red-400">{doc.error}</p>}
+                </div>
+                <span className={`ml-3 flex-shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ${(statusConfig[doc.status] || statusConfig.queued).classes}`}>
+                  {(statusConfig[doc.status] || { label: doc.status }).label}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
     </div>
   );
 }
