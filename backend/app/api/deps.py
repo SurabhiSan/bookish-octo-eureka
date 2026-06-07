@@ -1,6 +1,6 @@
 import hashlib
 from datetime import datetime, timezone
-from typing import Annotated
+from typing import Annotated, Optional
 import uuid
 
 from fastapi import Depends, HTTPException, status, Cookie
@@ -17,7 +17,7 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+    credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(bearer_scheme)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> User:
     token = credentials.credentials if credentials else None

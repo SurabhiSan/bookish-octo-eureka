@@ -1,6 +1,6 @@
 import json
 import re
-from typing import Optional
+from typing import Optional, List
 
 import redis as redis_lib
 from pydantic import BaseModel
@@ -13,19 +13,23 @@ from app.db.models import Clone, Chunk
 _redis: Optional[redis_lib.Redis] = None
 
 
-def _get_redis() -> redis_lib.Redis:
+def _get_redis() -> Optional[redis_lib.Redis]:
     global _redis
     if _redis is None:
-        _redis = redis_lib.from_url(get_settings().redis_url)
+        try:
+            _redis = redis_lib.from_url(get_settings().redis_url)
+            _redis.ping()
+        except Exception:
+            _redis = None
     return _redis
 
 
 class Chronicle(BaseModel):
-    traits: list[str] = []
-    beliefs: list[str] = []
+    traits: List[str] = []
+    beliefs: List[str] = []
     communication_style: dict = {}
-    anti_patterns: list[str] = []
-    confidence: str = "low"  # low / medium / high
+    anti_patterns: List[str] = []
+    confidence: str = "low"
 
 
 def _cache_key(persona_namespace: str) -> str:
@@ -33,15 +37,33 @@ def _cache_key(persona_namespace: str) -> str:
 
 
 def get_cached_chronicle(persona_namespace: str) -> Optional[str]:
-    return _get_redis().get(_cache_key(persona_namespace))
+    r = _get_redis()
+    if r is None:
+        return None
+    try:
+        return r.get(_cache_key(persona_namespace))
+    except Exception:
+        return None
 
 
 def set_cached_chronicle(persona_namespace: str, text: str) -> None:
-    _get_redis().setex(_cache_key(persona_namespace), 86400 * 7, text)
+    r = _get_redis()
+    if r is None:
+        return
+    try:
+        r.setex(_cache_key(persona_namespace), 86400 * 7, text)
+    except Exception:
+        pass
 
 
 def delete_chronicle_cache(persona_namespace: str) -> None:
-    _get_redis().delete(_cache_key(persona_namespace))
+    r = _get_redis()
+    if r is None:
+        return
+    try:
+        r.delete(_cache_key(persona_namespace))
+    except Exception:
+        pass
 
 
 def chronicle_to_text(c: Chronicle) -> str:
@@ -62,12 +84,8 @@ def chronicle_to_text(c: Chronicle) -> str:
 async def build_chronicle(db: AsyncSession, clone: Clone) -> Chronicle:
     settings = get_settings()
 
-    # Sample corpus chunks
     result = await db.execute(
-        select(Chunk)
-        .where(Chunk.clone_id == clone.id)
-        .order_by(Chunk.created_at.desc())
-        .limit(40)
+        select(Chunk).where(Chunk.clone_id == clone.id).order_by(Chunk.created_at.desc()).limit(40)
     )
     chunks = list(result.scalars())
 
@@ -77,15 +95,16 @@ async def build_chronicle(db: AsyncSession, clone: Clone) -> Chronicle:
 
     confidence = "high" if chunk_count > 20 else ("medium" if chunk_count >= 5 else "low")
 
-    if not settings.anthropic_api_key:
+    api_key = settings.openrouter_api_key or settings.anthropic_api_key
+    if not api_key:
         return Chronicle(confidence=confidence)
 
     sample_text = "\n\n---\n\n".join(c.content[:500] for c in chunks[:20])
 
-    import anthropic
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
+    from openai import OpenAI
+    client = OpenAI(api_key=api_key, base_url=settings.openrouter_base_url)
+    response = client.chat.completions.create(
+        model="anthropic/claude-sonnet-4-6",
         max_tokens=1000,
         messages=[{
             "role": "user",
@@ -100,7 +119,7 @@ async def build_chronicle(db: AsyncSession, clone: Clone) -> Chronicle:
     )
 
     try:
-        text = response.content[0].text
+        text = response.choices[0].message.content or ""
         match = re.search(r'\{.*\}', text, re.DOTALL)
         if match:
             data = json.loads(match.group())

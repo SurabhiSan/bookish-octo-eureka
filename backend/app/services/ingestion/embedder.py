@@ -1,25 +1,29 @@
 import asyncio
-from typing import Optional
-import anthropic
-import openai
+import json
+import re
+from typing import List, Dict
+
 from app.core.config import get_settings
 
 
-async def enrich_chunks(chunks: list[dict]) -> list[dict]:
-    """Add micro_summary and keywords to chunks via Claude Haiku."""
+async def enrich_chunks(chunks: List[Dict]) -> List[Dict]:
+    """Add micro_summary and keywords via OpenRouter (Claude Haiku)."""
     settings = get_settings()
-    if not settings.anthropic_api_key:
+    api_key = settings.openrouter_api_key or settings.anthropic_api_key
+
+    if not api_key:
         for c in chunks:
             c["micro_summary"] = c["content"][:200]
             c["keywords"] = []
         return chunks
 
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    from openai import AsyncOpenAI
+    client = AsyncOpenAI(api_key=api_key, base_url=settings.openrouter_base_url)
 
-    async def enrich_one(chunk: dict) -> dict:
+    async def enrich_one(chunk: Dict) -> Dict:
         try:
-            response = await client.messages.create(
-                model="claude-haiku-4-5-20251001",
+            response = await client.chat.completions.create(
+                model="anthropic/claude-haiku-4-5",
                 max_tokens=200,
                 messages=[{
                     "role": "user",
@@ -30,8 +34,7 @@ async def enrich_chunks(chunks: list[dict]) -> list[dict]:
                     ),
                 }],
             )
-            import json, re
-            text = response.content[0].text
+            text = response.choices[0].message.content or ""
             match = re.search(r'\{.*\}', text, re.DOTALL)
             if match:
                 parsed = json.loads(match.group())
@@ -42,19 +45,18 @@ async def enrich_chunks(chunks: list[dict]) -> list[dict]:
             chunk["keywords"] = []
         return chunk
 
-    return await asyncio.gather(*[enrich_one(c) for c in chunks])
+    return list(await asyncio.gather(*[enrich_one(c) for c in chunks]))
 
 
-async def embed_texts(texts: list[str]) -> list[list[float]]:
-    """Embed a list of texts using OpenAI text-embedding-3-large at 512d."""
+async def embed_texts(texts: List[str]) -> List[List[float]]:
+    """Zero-vector fallback — real embeddings need an OpenAI key."""
     settings = get_settings()
     if not settings.openai_api_key:
         return [[0.0] * 512 for _ in texts]
 
+    import openai
     client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
     results = []
-
-    # Batch in groups of 50
     for i in range(0, len(texts), 50):
         batch = texts[i: i + 50]
         response = await client.embeddings.create(
@@ -63,5 +65,4 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
             dimensions=512,
         )
         results.extend([e.embedding for e in response.data])
-
     return results

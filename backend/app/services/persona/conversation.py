@@ -1,5 +1,5 @@
 import json
-from typing import AsyncIterator
+from typing import AsyncIterator, List
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,7 +12,7 @@ from app.core.config import get_settings
 async def stream_conversation_turn(
     clone: Clone,
     user_message: str,
-    history: list[Message],
+    history: List[Message],
     db: AsyncSession,
 ) -> AsyncIterator[dict]:
     settings = get_settings()
@@ -22,7 +22,6 @@ async def stream_conversation_turn(
     if cached:
         anchor_text = cached.decode() if isinstance(cached, bytes) else cached
     elif clone.identity_anchor:
-        from app.services.persona.chronicle import Chronicle
         chronicle = Chronicle(**clone.identity_anchor)
         anchor_text = chronicle_to_text(chronicle)
     else:
@@ -42,10 +41,9 @@ async def stream_conversation_turn(
 
     # ── Zone 3: Conversation History ─────────────────────────────────────
     history_messages = []
-    for msg in history[-15:]:  # last 15 turns
+    for msg in history[-15:]:
         history_messages.append({"role": msg.role, "content": msg.content})
 
-    # Check if anchor re-injection is needed (every 8 turns)
     turn_count = len([m for m in history if m.role == "assistant"])
     needs_reinjection = turn_count > 0 and turn_count % 8 == 0
 
@@ -61,24 +59,31 @@ async def stream_conversation_turn(
     if needs_reinjection:
         system_prompt = f"[Identity anchor re-injection]\n{anchor_text}\n\n" + system_prompt
 
-    if not settings.anthropic_api_key:
+    api_key = settings.openrouter_api_key or settings.anthropic_api_key
+    if not api_key:
         yield {"type": "sources", "chunk_ids": chunk_ids}
-        yield {"type": "token", "text": f"[{clone.name}] I don't have an API key configured yet."}
+        yield {"type": "token", "text": f"[{clone.name}] No API key configured."}
         return
-
-    # ── Stream from Claude ───────────────────────────────────────────────
-    import anthropic
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
     yield {"type": "sources", "chunk_ids": chunk_ids}
 
-    messages = history_messages + [{"role": "user", "content": user_message}]
+    # ── Stream via OpenRouter (OpenAI-compatible) ─────────────────────────
+    from openai import AsyncOpenAI
+    client = AsyncOpenAI(
+        api_key=api_key,
+        base_url=settings.openrouter_base_url,
+    )
 
-    async with client.messages.stream(
-        model="claude-sonnet-4-6",
+    messages = [{"role": "system", "content": system_prompt}] + history_messages + [{"role": "user", "content": user_message}]
+
+    stream = await client.chat.completions.create(
+        model="anthropic/claude-sonnet-4-6",
         max_tokens=2000,
-        system=system_prompt,
         messages=messages,
-    ) as stream:
-        async for text in stream.text_stream:
-            yield {"type": "token", "text": text}
+        stream=True,
+    )
+
+    async for chunk in stream:
+        delta = chunk.choices[0].delta.content if chunk.choices else None
+        if delta:
+            yield {"type": "token", "text": delta}

@@ -40,7 +40,7 @@ export const api = {
     return apiFetch(path, { method: "PATCH", body: JSON.stringify(body) });
   },
   async delete(path: string) {
-    return apiFetch(path, { method: "DELETE" }),
+    return apiFetch(path, { method: "DELETE" });
   },
   async upload(path: string, formData: FormData) {
     const token = getToken();
