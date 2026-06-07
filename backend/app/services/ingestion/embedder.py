@@ -23,7 +23,7 @@ async def enrich_chunks(chunks: List[Dict]) -> List[Dict]:
     async def enrich_one(chunk: Dict) -> Dict:
         try:
             response = await client.chat.completions.create(
-                model="anthropic/claude-haiku-4-5",
+                model="meta-llama/llama-3.2-3b-instruct:free",
                 max_tokens=200,
                 messages=[{
                     "role": "user",

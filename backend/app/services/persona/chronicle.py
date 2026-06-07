@@ -104,7 +104,7 @@ async def build_chronicle(db: AsyncSession, clone: Clone) -> Chronicle:
     from openai import OpenAI
     client = OpenAI(api_key=api_key, base_url=settings.openrouter_base_url)
     response = client.chat.completions.create(
-        model="anthropic/claude-sonnet-4-6",
+        model="meta-llama/llama-3.1-8b-instruct:free",
         max_tokens=1000,
         messages=[{
             "role": "user",

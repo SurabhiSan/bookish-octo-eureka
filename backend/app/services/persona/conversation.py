@@ -77,7 +77,7 @@ async def stream_conversation_turn(
     messages = [{"role": "system", "content": system_prompt}] + history_messages + [{"role": "user", "content": user_message}]
 
     stream = await client.chat.completions.create(
-        model="anthropic/claude-sonnet-4-6",
+        model="meta-llama/llama-3.1-8b-instruct:free",
         max_tokens=2000,
         messages=messages,
         stream=True,
